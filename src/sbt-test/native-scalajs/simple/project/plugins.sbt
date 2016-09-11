@@ -1,0 +1,1 @@
+addSbtPlugin("com.example" % "sbt-multi-platforms" % sys.props("plugin.version"))
