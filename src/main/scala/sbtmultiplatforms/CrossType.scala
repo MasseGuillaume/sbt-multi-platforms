@@ -27,6 +27,9 @@ abstract class CrossType {
   /** The base directory for the JS project */
   final def jsDir(crossBase: File): File = projectDir(crossBase, "js")
 
+  /** The base directory for the NATIVE project */
+  final def nativeDir(crossBase: File): File = projectDir(crossBase, "native")
+
   /** The location of a shared source directory (if it exists)
    *  @param projectBase the base directory of a (true sbt) Project
    *  @param conf name of sub-directory for the configuration (typically "main"

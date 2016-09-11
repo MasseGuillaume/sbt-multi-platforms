@@ -17,6 +17,7 @@ final class CrossClasspathDependency(
 ) {
   def jvm: ClasspathDependency = ClasspathDependency(project.jvm, configuration)
   def js: ClasspathDependency = ClasspathDependency(project.js, configuration)
+  def native : ClasspathDependency = ClasspathDependency(project.native, configuration)
 }
 
 object CrossClasspathDependency {

@@ -9,10 +9,10 @@ lazy val app = crossProject2
   .jvmSettings(
     name := "app jvm"
   )
-  // .nativeSettings(
-  //   name := "app native"
-  // )
+  .nativeSettings(
+    name := "app native"
+  )
 
 lazy val appJs = app.js
 lazy val appJVM = app.jvm
-// lazy val appNative = app.native
+lazy val appNative = app.native

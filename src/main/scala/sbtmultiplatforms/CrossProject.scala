@@ -10,6 +10,7 @@
 package sbtmultiplatforms
 
 import org.scalajs.sbtplugin.ScalaJSPlugin
+import scala.scalanative.sbtplugin.ScalaNativePlugin
 
 import scala.language.implicitConversions
 import scala.language.experimental.macros
@@ -209,7 +210,8 @@ import java.io.File
 final class CrossProject private (
     crossType: CrossType,
     val jvm: Project,
-    val js: Project
+    val js: Project,
+    val native: Project
 ) {
 
   import CrossProject._
@@ -224,6 +226,10 @@ final class CrossProject private (
   def jsConfigure(transformer: Project => Project): CrossProject =
     copy(js = transformer(js))
 
+  /** Transform the underlying JS project */
+  def nativeConfigure(transformer: Project => Project): CrossProject =
+    copy(native = transformer(native))
+
   /** Add settings specific to the underlying JVM project */
   def jvmSettings(ss: Def.Setting[_]*): CrossProject =
     jvmConfigure(_.settings(ss: _*))
@@ -232,16 +238,21 @@ final class CrossProject private (
   def jsSettings(ss: Def.Setting[_]*): CrossProject =
     jsConfigure(_.settings(ss: _*))
 
+  /** Add settings specific to the underlying native project */
+  def nativeSettings(ss: Def.Setting[_]*): CrossProject =
+    nativeConfigure(_.settings(ss: _*))
+
   // Concrete alteration members
 
   def aggregate(refs: CrossProject*): CrossProject = {
     copy(
         jvm.aggregate(refs.map(_.jvm: ProjectReference): _*),
-        js.aggregate(refs.map(_.js: ProjectReference): _*))
+        js.aggregate(refs.map(_.js: ProjectReference): _*),
+        native.aggregate(refs.map(_.native: ProjectReference): _*))
   }
 
   def configs(cs: Configuration*): CrossProject =
-    copy(jvm.configs(cs: _*), js.configs(cs: _*))
+    copy(jvm.configs(cs: _*), js.configs(cs: _*), native.configs(cs: _*))
 
   def configureCross(transforms: (CrossProject => CrossProject)*): CrossProject =
     transforms.foldLeft(this)((p, t) => t(p))
@@ -253,22 +264,22 @@ final class CrossProject private (
   // TODO: rename to "configure" when compatibility can be broken (1.0.0)
   //       and the existing deprecated "configure" is removed
   def configureAll(transforms: (Project => Project)*): CrossProject =
-    copy(jvm.configure(transforms: _*), js.configure(transforms: _*))
+    copy(jvm.configure(transforms: _*), js.configure(transforms: _*), native.configure(transforms: _*))
 
   def dependsOn(deps: CrossClasspathDependency*): CrossProject =
-    copy(jvm.dependsOn(deps.map(_.jvm): _*), js.dependsOn(deps.map(_.js): _*))
+    copy(jvm.dependsOn(deps.map(_.jvm): _*), js.dependsOn(deps.map(_.js): _*), native.dependsOn(deps.map(_.native): _*))
 
   def disablePlugins(ps: AutoPlugin*): CrossProject =
-    copy(jvm.disablePlugins(ps: _*), js.disablePlugins(ps: _*))
+    copy(jvm.disablePlugins(ps: _*), js.disablePlugins(ps: _*), native.disablePlugins(ps: _*))
 
   def enablePlugins(ns: Plugins*): CrossProject =
-    copy(jvm.enablePlugins(ns: _*), js.enablePlugins(ns: _*))
+    copy(jvm.enablePlugins(ns: _*), js.enablePlugins(ns: _*), native.enablePlugins(ns: _*))
 
   def in(dir: File): CrossProject =
-    copy(jvm.in(crossType.jvmDir(dir)), js.in(crossType.jsDir(dir)))
+    copy(jvm.in(crossType.jvmDir(dir)), js.in(crossType.jsDir(dir)), native.in(crossType.jsDir(dir)))
 
   def overrideConfigs(cs: Configuration*): CrossProject =
-    copy(jvm.overrideConfigs(cs: _*), js.overrideConfigs(cs: _*))
+    copy(jvm.overrideConfigs(cs: _*), js.overrideConfigs(cs: _*), native.overrideConfigs(cs: _*))
 
   /** Configures how settings from other sources, such as .sbt files, are
    *  appended to the explicitly specified settings for this project.
@@ -276,28 +287,28 @@ final class CrossProject private (
    *  Note: If you disable AutoPlugins here, Scala.js will not work
    */
   def settingSets(select: AddSettings*): CrossProject =
-    copy(jvm.settingSets(select: _*), js.settingSets(select: _*))
+    copy(jvm.settingSets(select: _*), js.settingSets(select: _*), native.settingSets(select: _*))
 
   def settings(ss: Def.Setting[_]*): CrossProject =
-    copy(jvm.settings(ss: _*), js.settings(ss: _*))
+    copy(jvm.settings(ss: _*), js.settings(ss: _*), native.settings(ss: _*))
 
-  override def toString(): String = s"CrossProject(jvm = $jvm, js = $js)"
+  override def toString(): String = s"CrossProject(jvm = $jvm, js = $js, native = $native)"
 
   // Helpers
 
-  private def copy(jvm: Project = jvm, js: Project = js): CrossProject =
-    new CrossProject(crossType, jvm, js)
+  private def copy(jvm: Project = jvm, js: Project = js, native: Project = native): CrossProject =
+    new CrossProject(crossType, jvm, js, native)
 
 }
 
 object CrossProject extends CrossProjectExtra {
 
   def apply(id: String, base: File, crossType: CrossType): CrossProject = {
-    CrossProject(id + "JVM", id + "JS", base, crossType).
+    CrossProject(id + "JVM", id + "JS", id + "NATIVE", base, crossType).
       settings(name := id)
   }
 
-  def apply(jvmId: String, jsId: String, base: File,
+  def apply(jvmId: String, jsId: String, nativeId: String, base: File,
       crossType: CrossType): CrossProject = {
 
     val sss = sharedSrcSettings(crossType)
@@ -309,7 +320,11 @@ object CrossProject extends CrossProjectExtra {
       settings(sss: _*).
       enablePlugins(ScalaJSPlugin)
 
-    new CrossProject(crossType, jvm, js)
+    val native = Project(nativeId, crossType.nativeDir(base)).
+      settings(sss: _*).
+      enablePlugins(ScalaNativePlugin)
+
+    new CrossProject(crossType, jvm, js, native)
   }
 
   private def sharedSrcSettings(crossType: CrossType) = Seq(
